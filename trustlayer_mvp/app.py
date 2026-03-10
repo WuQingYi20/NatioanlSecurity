@@ -16,7 +16,7 @@ from trustlayer_mvp.models import (
     RiskLevel, OperatorTier, CheckId, AgentOutput,
 )
 from trustlayer_mvp.pipeline import GovernancePipeline
-from trustlayer_mvp.scenarios import ALL_SCENARIOS
+from trustlayer_mvp.scenarios import ALL_SCENARIOS, get_kg_scenarios
 from trustlayer_mvp.tier1_guardrail import calibrate_confidence
 from trustlayer_mvp import config
 
@@ -42,8 +42,9 @@ st.markdown("""<style>
 .check-skip{background:#1a1d23;border-left:4px solid #444;color:#666}
 .hash-entry{font-family:monospace;font-size:12px;background:#0a0a0a;border:1px solid #333;border-radius:6px;padding:10px;margin:4px 0}
 .enforcement-err{background:#2d0a0a;border:2px solid #ef4444;border-radius:8px;padding:12px;margin:8px 0;color:#fca5a5}
-.schema-section{background:#111827;border:1px solid #374151;border-radius:8px;padding:14px;margin:8px 0}
-.evidence-card{background:#111827;border-left:3px solid #6366f1;border-radius:0 8px 8px 0;padding:12px;margin:6px 0}
+.schema-section{background:#111827;border:1px solid #374151;border-radius:8px;padding:14px;margin:8px 0;color:#e5e7eb;font-size:15px;line-height:1.6}
+.schema-section b{color:#f9fafb}
+.evidence-card{background:#111827;border-left:3px solid #6366f1;border-radius:0 8px 8px 0;padding:12px;margin:6px 0;color:#e5e7eb;font-size:15px;line-height:1.6}
 </style>""", unsafe_allow_html=True)
 
 # =============================================================================
@@ -150,6 +151,14 @@ def page_select():
         for h in reversed(st.session_state.history):
             ic = {"pass":"✅","flag":"⚠️","block":"🚫"}.get(h["verdict"],"❓")
             st.caption(f"{ic} **{h['name']}** → {h['verdict'].upper()} | Risk: {h['risk'].upper()} | {h['action']}")
+
+    st.divider()
+
+    # Knowledge Graph entry point
+    if st.button("Explore Knowledge Graph", use_container_width=True, type="primary"):
+        go("knowledge_graph")
+    st.caption("View the synthetic multi-agency knowledge graph, inspect entity relationships, "
+               "and launch scenarios from graph traversals.")
 
     st.divider()
     c1,c2,c3 = st.columns(3)
@@ -725,9 +734,131 @@ def page_audit_log():
 
 
 # =============================================================================
+# PAGE: Knowledge Graph Explorer
+# =============================================================================
+
+def page_knowledge_graph():
+    import streamlit.components.v1 as components
+    from trustlayer_mvp.knowledge_graph import SyntheticKnowledgeGraph
+
+    st.markdown("## Knowledge Graph Explorer")
+    st.caption("Synthetic multi-agency OSINT knowledge graph — data sources: "
+               "Skatteverket, Bolagsverket, Försäkringskassan, Lantmäteriet, OSINT")
+
+    kg = SyntheticKnowledgeGraph()
+    stats = kg.stats()
+
+    # Stats bar
+    c1, c2, c3, c4 = st.columns(4)
+    with c1: st.metric("Nodes", stats["nodes"])
+    with c2: st.metric("Edges", stats["edges"])
+    with c3: st.metric("Clusters", stats["clusters"])
+    with c4: st.metric("Data Sources", stats["data_sources"])
+
+    st.divider()
+
+    # Cluster filter
+    cluster_names = {
+        "all": "Full Graph — All Clusters",
+        "vat_carousel": "VAT Carousel Fraud Network",
+        "social_media_fp": "Social Media False Positive",
+        "insurance_fraud": "Sickness Benefit Fraud",
+        "address_changes": "Address Changes (Low Confidence)",
+        "related_party": "Related-Party Tax Underreporting",
+        "routine_filing": "Routine Late Filing",
+    }
+    selected = st.selectbox("Highlight scenario cluster", list(cluster_names.keys()),
+                            format_func=lambda x: cluster_names[x])
+
+    highlight = None if selected == "all" else selected
+
+    # Render interactive graph
+    html = kg.to_vis_html(highlight_cluster=highlight, height="550px")
+    components.html(html, height=620, scrolling=False)
+
+    # Show traversal details for selected cluster
+    if highlight:
+        st.divider()
+        st.markdown(f"### Traversal: {cluster_names[selected]}")
+
+        path = kg.get_traversal_path(highlight)
+        for i, (u, v, data) in enumerate(path):
+            u_label = kg.G.nodes[u].get("label", u).replace("\n", " ")
+            v_label = kg.G.nodes[v].get("label", v).replace("\n", " ")
+            etype = data.get("edge_type", "").upper()
+            source = data.get("source", "")
+            note = data.get("note", "")
+
+            is_contradiction = data.get("edge_type") == "contradicts"
+            css_class = "check-fail" if is_contradiction else "check-pass"
+            arrow = "⚡" if is_contradiction else "→"
+
+            detail = f"<b>Source:</b> {source}"
+            if note:
+                detail += f" | <b>Note:</b> {note}"
+
+            st.markdown(
+                f'<div class="check-row {css_class}">'
+                f'<b>Hop {i+1}:</b> {u_label} {arrow} <code>{etype}</code> {arrow} {v_label}'
+                f'<br><span style="font-size:12px;opacity:0.7">{detail}</span></div>',
+                unsafe_allow_html=True
+            )
+
+        # Node type breakdown for cluster
+        st.markdown("#### Entities in this cluster")
+        cluster_nodes = kg.get_cluster_nodes(highlight)
+        type_counts: dict[str, list[str]] = {}
+        for nid in cluster_nodes:
+            ntype = kg.G.nodes[nid].get("node_type", "unknown")
+            type_counts.setdefault(ntype, []).append(
+                kg.G.nodes[nid].get("label", nid).replace("\n", " ")
+            )
+        for ntype, labels in type_counts.items():
+            st.markdown(f"**{ntype.replace('_',' ').title()}** ({len(labels)})")
+            for lbl in labels:
+                st.caption(f"  {lbl}")
+
+        st.divider()
+        if st.button("Run this scenario through pipeline →", use_container_width=True):
+            scenario_map = {s["cluster"]: s for s in kg.all_scenarios() if "cluster" in s}
+            if highlight in scenario_map:
+                s = scenario_map[highlight]
+                st.session_state.scenario = s
+                st.session_state.output = s["output"]
+                go("agent_input")
+
+    st.divider()
+    cols = st.columns(2)
+    with cols[0]:
+        st.markdown("#### Nodes by Type")
+        for ntype, count in sorted(kg.nodes_by_type().items()):
+            color = _NODE_COLORS_FOR_STATS.get(ntype, "#888")
+            st.markdown(f'<span style="color:{color}">●</span> {ntype.replace("_"," ").title()}: **{count}**',
+                        unsafe_allow_html=True)
+    with cols[1]:
+        st.markdown("#### Edges by Data Source")
+        for src, count in sorted(kg.edges_by_source().items()):
+            st.markdown(f"**{src}**: {count}")
+
+    st.divider()
+    if st.button("← Back to scenarios", use_container_width=True, key="kg_back"):
+        go("select")
+
+# Color map for stats display (matches knowledge_graph.py)
+_NODE_COLORS_FOR_STATS = {
+    "person": "#6366f1", "company": "#22c55e", "property": "#eab308",
+    "tax_filing": "#f97316", "benefit_claim": "#ec4899",
+    "social_post": "#06b6d4", "intel_bulletin": "#ef4444",
+    "address": "#94a3b8", "medical_cert": "#a855f7",
+    "employment_record": "#f59e0b",
+}
+
+
+# =============================================================================
 # Router
 # =============================================================================
 
 {"select": page_select, "agent_input": page_agent_input, "tier1": page_tier1,
  "tier2": page_tier2, "tier3": page_tier3, "audit_log": page_audit_log,
+ "knowledge_graph": page_knowledge_graph,
  }.get(st.session_state.page, page_select)()

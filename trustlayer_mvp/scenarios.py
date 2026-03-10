@@ -422,3 +422,19 @@ ALL_SCENARIOS = [
     scenario_scope_violation,
     scenario_routine_low_risk,
 ]
+
+
+# =============================================================================
+# Knowledge Graph backed scenarios
+# =============================================================================
+
+def get_kg_scenarios():
+    """Return all 6 scenarios generated from the synthetic knowledge graph.
+
+    These are functionally equivalent to the hardcoded scenarios above,
+    but the evidence and fragments are derived from graph traversals,
+    and the reasoning chains show explicit KG hop paths.
+    """
+    from .knowledge_graph import SyntheticKnowledgeGraph
+    kg = SyntheticKnowledgeGraph()
+    return kg, kg.all_scenarios()
