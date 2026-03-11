@@ -123,21 +123,85 @@ submit_evidence_bundle()
   └─ mandatory ALTERNATIVE field            Oversight body can halt pipeline
 ```
 
-## RL Training Loop
+## RL Training Loop — Multi-Agent Knowledge Graph Traversal
 
 ```
-              ┌──────────────────────────────────────┐
-              │                                      │
-   Observe    │    Act         Environment    Reward │   Update
-   state ────►│── action ────► sandbox ────► calc. ──┼──► LoRA
-              │                   │                  │
-              │              read-only               │
-              │              (no writes)             │
-              └──────────────────────────────────────┘
+                        Sovereign Knowledge Graph
+                       ┌─────────────────────────┐
+                       │  ~100M nodes, ~1B edges  │
+                       │  (read-only sandbox)     │
+                       └────────┬────────────────┘
+                                │
+                    ┌───────────┼───────────┐
+                    │           │           │
+                    ▼           ▼           ▼
+             ┌──────────┐┌──────────┐┌──────────┐
+             │ Agent 1  ││ Agent 2  ││ Agent N  │  each with different
+             │ (LoRA-A) ││ (LoRA-B) ││ (LoRA-N) │  strategy / adapter
+             └────┬─────┘└────┬─────┘└────┬─────┘
+                  │           │           │
+          ┌───────▼───────────▼───────────▼───────┐
+          │         Per-Agent RL Episode          │
+          │                                       │
+          │  1. OBSERVE   read subgraph           │
+          │       │       (semantic window)        │
+          │       ▼                                │
+          │  2. DECIDE    ┌─────────────────────┐  │
+          │               │ explore_node()      │  │
+          │               │   → expand subgraph │  │
+          │               │ request_clearance() │  │
+          │               │   → unlock personal │  │
+          │               │     data (needs     │  │
+          │               │     human approval) │  │
+          │               │ submit_evidence()   │  │
+          │               │   → end episode,    │  │
+          │               │     report to human │  │
+          │               └─────────────────────┘  │
+          │       │                                │
+          │       ▼                                │
+          │  3. REPEAT until submit or budget=50   │
+          └───────────────────┬───────────────────┘
+                              │
+                              ▼
+          ┌───────────────────────────────────────┐
+          │         HUMAN OPERATOR REVIEW         │
+          │                                       │
+          │  sees evidence first, conclusion last  │
+          │  approves / rejects / requests more    │
+          │                                       │
+          │  verdict feeds back as reward signal   │
+          └───────────────────┬───────────────────┘
+                              │
+                              ▼
+          ┌───────────────────────────────────────┐
+          │           REWARD FUNCTION             │
+          │                                       │
+          │  R = α·Confidence + β·Efficiency      │
+          │      − γ·Privacy_Penalty              │
+          │                                       │
+          │  α  Confidence   ◄── human verdict    │
+          │     (correct threat?) (weak, delayed)  │
+          │                                       │
+          │  β  Efficiency   ◄── step count       │
+          │     (fewer steps = higher reward)      │
+          │                                       │
+          │  γ  Privacy      ◄── auto-detected    │
+          │     (accessed forbidden data? → penalty)│
+          └───────────────────┬───────────────────┘
+                              │
+                              ▼
+          ┌───────────────────────────────────────┐
+          │          LoRA FINE-TUNING             │
+          │                                       │
+          │  update small adapter weights only     │
+          │  (< 1% of model parameters)            │
+          │  runs on consumer-grade GPU            │
+          │  domain-specific, hot-swappable        │
+          └───────────────────────────────────────┘
 
-Reward = α·Threat_Confidence + β·Efficiency − γ·Privacy_Penalty
-         ▲ weak signal          ▲ noisy        ▲ strong signal
-         (biased labels)        (objective)    (objective binary)
+  Agents compete via GRPO:
+    agree   → confidence ↑
+    disagree → escalate to human (not averaged)
 ```
 
 ## Data Flow: CyberSecurity AB

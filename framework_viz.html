@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sentinel-KG Framework</title>
+<style>
+  :root {
+    --bg: #0f172a; --surface: #1e293b; --surface2: #334155;
+    --accent: #6366f1; --accent2: #818cf8; --green: #10b981;
+    --red: #ef4444; --orange: #f59e0b; --cyan: #06b6d4;
+    --text: #e2e8f0; --muted: #94a3b8; --border: #475569;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); overflow-x:hidden; }
+
+  /* ── Nav ── */
+  nav { position:fixed; top:0; left:0; right:0; z-index:100; background:rgba(15,23,42,.92); backdrop-filter:blur(12px); border-bottom:1px solid var(--border); display:flex; gap:4px; padding:10px 20px; overflow-x:auto; }
+  nav button { background:transparent; color:var(--muted); border:1px solid transparent; padding:8px 16px; border-radius:8px; cursor:pointer; font-size:13px; white-space:nowrap; transition:.2s; }
+  nav button:hover { color:var(--text); background:var(--surface); }
+  nav button.active { color:var(--accent2); border-color:var(--accent); background:rgba(99,102,241,.12); }
+
+  /* ── Sections ── */
+  .section { display:none; padding:80px 40px 40px; max-width:1200px; margin:0 auto; min-height:100vh; }
+  .section.active { display:block; }
+  .section h1 { font-size:28px; margin-bottom:8px; color:var(--accent2); }
+  .section .subtitle { color:var(--muted); margin-bottom:32px; font-size:15px; }
+
+  /* ── Architecture Diagram ── */
+  .arch-container { position:relative; }
+  .arch-layer { border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:16px; cursor:pointer; transition:.3s; position:relative; }
+  .arch-layer:hover { border-color:var(--accent); box-shadow:0 0 20px rgba(99,102,241,.15); }
+  .arch-layer.expanded { background:var(--surface); }
+  .arch-layer .layer-header { display:flex; justify-content:space-between; align-items:center; }
+  .arch-layer .layer-header h3 { font-size:16px; }
+  .arch-layer .layer-header .badge { font-size:11px; padding:3px 10px; border-radius:20px; }
+  .arch-layer .detail { max-height:0; overflow:hidden; transition:max-height .4s ease; }
+  .arch-layer.expanded .detail { max-height:600px; }
+  .arch-layer .detail-inner { padding-top:16px; font-size:14px; color:var(--muted); line-height:1.8; }
+  .flow-arrow { text-align:center; color:var(--accent); font-size:24px; margin:4px 0; }
+  .agencies-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:12px; }
+  .agency-card { background:var(--surface2); border-radius:8px; padding:12px; text-align:center; font-size:13px; border:1px solid var(--border); }
+  .agency-card .agency-name { font-weight:600; margin-bottom:4px; color:var(--cyan); }
+  .agency-card .agency-data { color:var(--muted); font-size:11px; }
+
+  /* ── MDP Section ── */
+  .mdp-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  .mdp-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:24px; transition:.3s; cursor:pointer; }
+  .mdp-card:hover { border-color:var(--accent); transform:translateY(-2px); }
+  .mdp-card h3 { color:var(--accent2); margin-bottom:12px; font-size:18px; }
+  .mdp-card.full-width { grid-column:1/-1; }
+  .obs-table { width:100%; border-collapse:collapse; font-size:13px; margin-top:12px; }
+  .obs-table th { text-align:left; color:var(--cyan); padding:6px 8px; border-bottom:1px solid var(--border); }
+  .obs-table td { padding:6px 8px; border-bottom:1px solid rgba(71,85,105,.4); color:var(--muted); }
+  .obs-table td:first-child { color:var(--text); font-family:monospace; font-size:12px; }
+  .action-item { display:flex; align-items:flex-start; gap:12px; padding:10px 0; border-bottom:1px solid rgba(71,85,105,.3); }
+  .action-item:last-child { border:none; }
+  .action-icon { width:36px; height:36px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+  .action-item h4 { font-size:14px; margin-bottom:2px; }
+  .action-item p { font-size:12px; color:var(--muted); }
+  .reward-formula { background:var(--bg); border-radius:8px; padding:20px; margin:16px 0; font-family:monospace; text-align:center; font-size:16px; }
+  .reward-term { display:inline-block; padding:4px 8px; margin:4px; border-radius:4px; font-size:13px; }
+
+  /* ── Episode Simulation ── */
+  .sim-container { display:flex; gap:20px; }
+  .sim-graph { flex:1; background:var(--surface); border-radius:12px; padding:20px; min-height:500px; position:relative; }
+  .sim-panel { width:320px; flex-shrink:0; }
+  .sim-panel .panel-card { background:var(--surface); border-radius:12px; padding:16px; margin-bottom:12px; border:1px solid var(--border); }
+  .sim-panel h4 { font-size:13px; color:var(--accent2); margin-bottom:8px; }
+  .sim-btn { background:var(--accent); color:white; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; font-size:13px; width:100%; margin-bottom:8px; transition:.2s; }
+  .sim-btn:hover { background:var(--accent2); }
+  .sim-btn:disabled { opacity:.4; cursor:not-allowed; }
+  .sim-btn.danger { background:var(--red); }
+  .sim-btn.success { background:var(--green); }
+  .sim-log { font-size:12px; font-family:monospace; color:var(--muted); max-height:200px; overflow-y:auto; line-height:1.6; }
+  .sim-log .threat { color:var(--red); }
+  .sim-log .benign { color:var(--green); }
+  .sim-log .reward-pos { color:var(--green); }
+  .sim-log .reward-neg { color:var(--red); }
+  .stat-row { display:flex; justify-content:space-between; font-size:13px; padding:4px 0; }
+  .stat-row .label { color:var(--muted); }
+  .stat-row .value { font-family:monospace; }
+  canvas { border-radius:8px; }
+
+  /* ── Actors ── */
+  .actor-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:12px; display:flex; gap:16px; align-items:flex-start; transition:.3s; cursor:pointer; }
+  .actor-card:hover { border-color:var(--accent); }
+  .actor-icon { width:48px; height:48px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:24px; flex-shrink:0; }
+  .actor-info h3 { font-size:15px; margin-bottom:4px; }
+  .actor-info p { font-size:13px; color:var(--muted); line-height:1.5; }
+  .trust-badge { display:inline-block; font-size:11px; padding:2px 8px; border-radius:10px; margin-top:6px; }
+
+  /* ── Guardrails ── */
+  .guardrail-list { display:grid; gap:12px; }
+  .guardrail-item { background:var(--surface); border-left:3px solid var(--accent); border-radius:0 8px 8px 0; padding:16px 20px; cursor:pointer; transition:.3s; }
+  .guardrail-item:hover { background:var(--surface2); }
+  .guardrail-item h4 { font-size:14px; margin-bottom:4px; }
+  .guardrail-item p { font-size:13px; color:var(--muted); }
+  .guardrail-item .why { display:none; margin-top:8px; font-size:12px; color:var(--orange); border-top:1px solid var(--border); padding-top:8px; }
+  .guardrail-item.open .why { display:block; }
+
+  /* ── AB Flow ── */
+  .ab-flow { display:flex; flex-direction:column; gap:0; align-items:center; }
+  .ab-node { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px 32px; text-align:center; min-width:300px; transition:.3s; cursor:pointer; }
+  .ab-node:hover { border-color:var(--accent); }
+  .ab-node h4 { font-size:15px; margin-bottom:4px; }
+  .ab-node p { font-size:12px; color:var(--muted); }
+  .ab-arrow { color:var(--accent); font-size:14px; padding:8px 0; display:flex; flex-direction:column; align-items:center; }
+  .ab-arrow .arrow-label { font-size:11px; color:var(--muted); margin-bottom:4px; }
+  .ab-warning { background:rgba(245,158,11,.08); border:1px solid var(--orange); border-radius:8px; padding:16px; margin-top:24px; max-width:500px; }
+  .ab-warning h4 { color:var(--orange); font-size:14px; margin-bottom:6px; }
+  .ab-warning p { font-size:13px; color:var(--muted); line-height:1.5; }
+</style>
+</head>
+<body>
+
+<nav id="nav">
+  <button class="active" onclick="show('arch')">System Architecture</button>
+  <button onclick="show('mdp')">RL Formulation (MDP)</button>
+  <button onclick="show('sim')">Episode Simulation</button>
+  <button onclick="show('actors')">Actors & Trust</button>
+  <button onclick="show('guardrails')">Guardrails G1-G6</button>
+  <button onclick="show('ab')">CyberSecurity AB</button>
+</nav>
+
+<!-- ════════════ 1. ARCHITECTURE ════════════ -->
+<div class="section active" id="sec-arch">
+  <h1>System Architecture</h1>
+  <p class="subtitle">Click each layer to expand details. Data flows top → bottom.</p>
+
+  <div class="arch-container">
+    <div class="arch-layer" onclick="toggleLayer(this)" style="border-color:var(--orange);">
+      <div class="layer-header">
+        <h3 style="color:var(--orange)">CyberSecurity AB (External)</h3>
+        <span class="badge" style="background:rgba(245,158,11,.15);color:var(--orange)">UNTRUSTED</span>
+      </div>
+      <div class="detail"><div class="detail-inner">
+        International OSINT knowledge graph. Treated as <strong>low-trust hypothesis generator</strong>.<br>
+        One-way queries only. Queries are obfuscated and batched to prevent intelligence leakage.<br>
+        Architecture: plugin, not dependency &mdash; disconnection must be painless.
+      </div></div>
+    </div>
+    <div class="flow-arrow">&darr; one-way obfuscated queries</div>
+
+    <div class="arch-layer" onclick="toggleLayer(this)" style="border-color:var(--cyan);">
+      <div class="layer-header">
+        <h3 style="color:var(--cyan)">4 Government Agencies</h3>
+        <span class="badge" style="background:rgba(6,182,212,.15);color:var(--cyan)">AIR-GAPPED</span>
+      </div>
+      <div class="detail"><div class="detail-inner">
+        <div class="agencies-grid">
+          <div class="agency-card"><div class="agency-name">Skatteverket</div><div class="agency-data">Tax records, personnummer, addresses</div></div>
+          <div class="agency-card"><div class="agency-name">F&ouml;rs&auml;kringskassan</div><div class="agency-data">Insurance/benefit claims</div></div>
+          <div class="agency-card"><div class="agency-name">Arbetsf&ouml;rmedlingen</div><div class="agency-data">Employment records</div></div>
+          <div class="agency-card"><div class="agency-name">Bolagsverket</div><div class="agency-data">Company registry, ownership, directors</div></div>
+        </div>
+        Each agency maintains sovereignty. Data merged only via Entity Resolution Pipeline.
+      </div></div>
+    </div>
+    <div class="flow-arrow">&darr; personnummer / org.nr matching</div>
+
+    <div class="arch-layer" onclick="toggleLayer(this)">
+      <div class="layer-header">
+        <h3>Entity Resolution Pipeline</h3>
+        <span class="badge" style="background:rgba(99,102,241,.15);color:var(--accent2)">PREPROCESSING</span>
+      </div>
+      <div class="detail"><div class="detail-inner">
+        ~85% resolved via personnummer/org.nr exact match.<br>
+        Remaining ~15% uses probabilistic disambiguation with <strong>confidence scores</strong>.<br>
+        Low-confidence links (&lt;0.6) penalised in agent reward function &mdash; agent learns to distrust them.
+      </div></div>
+    </div>
+    <div class="flow-arrow">&darr;</div>
+
+    <div class="arch-layer" onclick="toggleLayer(this)">
+      <div class="layer-header">
+        <h3>Sovereign Knowledge Graph</h3>
+        <span class="badge" style="background:rgba(99,102,241,.15);color:var(--accent2)">~100M+ nodes</span>
+      </div>
+      <div class="detail"><div class="detail-inner">
+        Persons, companies, addresses, transactions. ~1B+ edges.<br>
+        Node types: <code>PERSON | COMPANY | ADDRESS | TRANSACTION</code><br>
+        Edge types: <code>OWNS | DIRECTS | BOARD_MEMBER | EMPLOYED_BY | FILED | REGISTERED_AT | TRANSACTED | CLAIMS_BENEFIT | CO_OWNER</code>
+      </div></div>
+    </div>
+    <div class="flow-arrow">&darr;</div>
+
+    <div class="arch-layer" onclick="toggleLayer(this)" style="border-color:var(--green);">
+      <div class="layer-header">
+        <h3 style="color:var(--green)">Semantic Window (&sect;3.5)</h3>
+        <span class="badge" style="background:rgba(16,185,129,.15);color:var(--green)">PRIVACY GATE</span>
+      </div>
+      <div class="detail"><div class="detail-inner">
+        Relationship-type filter per investigation. Agent sees only edges matching its clearance level.<br>
+        <strong>Level 0</strong>: Financial + Corporate edges only<br>
+        <strong>Level 1</strong>: + Personal edges (requires human approval via <code>request_clearance()</code>)<br>
+        Key design: agent must <em>justify</em> widening its view &mdash; privacy-by-default.
+      </div></div>
+    </div>
+    <div class="flow-arrow">&darr;</div>
+
+    <div class="arch-layer" onclick="toggleLayer(this)" style="border-color:var(--accent);">
+      <div class="layer-header">
+        <h3 style="color:var(--accent2)">RL Agent Ensemble</h3>
+        <span class="badge" style="background:rgba(239,68,68,.15);color:var(--red)">UNTRUSTED</span>
+      </div>
+      <div class="detail"><div class="detail-inner">
+        Multiple agents traverse graph independently. GRPO scoring resolves disagreements.<br>
+        Local LLM (Llama/Mistral) + domain-scoped LoRA adapters.<br>
+        <strong>Read-only sandbox</strong> &mdash; agents cannot write to KG. All outputs are evidence bundles subject to validation.
+      </div></div>
+    </div>
+    <div class="flow-arrow">&darr; evidence bundle / escalation</div>
+
+    <div class="arch-layer" onclick="toggleLayer(this)" style="border-color:var(--red);">
+      <div class="layer-header">
+        <h3 style="color:var(--red)">Guardrail Layer (G1-G6)</h3>
+        <span class="badge" style="background:rgba(239,68,68,.15);color:var(--red)">RUNTIME CHECKS</span>
+      </div>
+      <div class="detail"><div class="detail-inner">
+        G1: Confidence calibration (Platt scaling)<br>
+        G2: Scope boundary check<br>
+        G3: Anti-hallucination (evidence &rarr; real DB entry)<br>
+        G4: Evidence sufficiency<br>
+        G5: Disproportion detector (bias check)<br>
+        G6: Independent risk assessment (agent self-report discarded)
+      </div></div>
+    </div>
+    <div class="flow-arrow">&darr;</div>
+
+    <div class="arch-layer" onclick="toggleLayer(this)">
+      <div class="layer-header">
+        <h3>Human-in-the-Loop (Operator)</h3>
+        <span class="badge" style="background:rgba(16,185,129,.15);color:var(--green)">TRUSTED (monitored)</span>
+      </div>
+      <div class="detail"><div class="detail-inner">
+        Evidence shown FIRST, conclusion hidden &mdash; prevents anchoring bias.<br>
+        Mandatory alternative hypothesis field.<br>
+        Risk-tiered: Low &rarr; standard | Medium &rarr; senior + written reasoning | High &rarr; + deliberation delay | Critical &rarr; dual approval
+      </div></div>
+    </div>
+    <div class="flow-arrow">&darr;</div>
+
+    <div class="arch-layer" onclick="toggleLayer(this)">
+      <div class="layer-header">
+        <h3>Audit Trail</h3>
+        <span class="badge" style="background:rgba(99,102,241,.15);color:var(--accent2)">SHA-256 HASH CHAIN</span>
+      </div>
+      <div class="detail"><div class="detail-inner">
+        Every action, state transition, and decision logged immutably.<br>
+        Accessible to oversight body + Riksdag. 3-year sunset review cycle.
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════ 2. MDP FORMULATION ════════════ -->
+<div class="section" id="sec-mdp">
+  <h1>RL Formulation: KG Traversal as MDP</h1>
+  <p class="subtitle">How knowledge graph investigation maps to a Markov Decision Process.</p>
+
+  <div class="mdp-grid">
+    <!-- State Space -->
+    <div class="mdp-card" onclick="this.classList.toggle('expanded')">
+      <h3>S &mdash; State Space (48-dim)</h3>
+      <p style="color:var(--muted);font-size:13px;margin-bottom:8px">Agent observes a fixed-size vector encoding its current position, neighborhood, and investigation progress.</p>
+      <table class="obs-table">
+        <tr><th>Indices</th><th>Feature</th><th>Meaning</th></tr>
+        <tr><td>[0:4]</td><td>Node type one-hot</td><td>PERSON | COMPANY | TRANSACTION | ADDRESS</td></tr>
+        <tr><td>[4]</td><td>Amount (norm.)</td><td>Transaction value / max &mdash; 0 for non-transactions</td></tr>
+        <tr><td>[6:10]</td><td>Neighbor counts</td><td>By relationship: financial / corporate / personal / total</td></tr>
+        <tr><td>[10:14]</td><td>Neighbor types</td><td>Distribution of node types in visible neighborhood</td></tr>
+        <tr><td>[14:16]</td><td>Amount stats</td><td>Mean & max transaction amounts in neighborhood</td></tr>
+        <tr><td>[16:18]</td><td>ER confidence</td><td>Fraction of low-confidence links; # data sources</td></tr>
+        <tr><td>[18:26]</td><td>Investigation state</td><td>Steps used, nodes visited, evidence count, clearance, budget, threat ratio, exploration signal</td></tr>
+        <tr><td>[26:42]</td><td>Visited histogram</td><td>4 node_type &times; 4 source (16-dim) &mdash; investigation coverage</td></tr>
+        <tr><td>[42:48]</td><td>Graph statistics</td><td>Total nodes, edges, threat nodes (+ 3 reserved)</td></tr>
+      </table>
+    </div>
+
+    <!-- Action Space -->
+    <div class="mdp-card">
+      <h3>A &mdash; Action Space</h3>
+      <p style="color:var(--muted);font-size:13px;margin-bottom:12px">MultiDiscrete([3, 20]) &mdash; action type + parameter</p>
+      <div class="action-item">
+        <div class="action-icon" style="background:rgba(99,102,241,.15);color:var(--accent2)">&#x1f50d;</div>
+        <div><h4>explore_node(neighbor_idx)</h4><p>Move to a visible neighbor. Must be within semantic window scope. Collects evidence.</p></div>
+      </div>
+      <div class="action-item">
+        <div class="action-icon" style="background:rgba(245,158,11,.15);color:var(--orange)">&#x1f513;</div>
+        <div><h4>request_clearance(level)</h4><p>Ask human to widen semantic window. Costly: -0.05 if granted, -0.10 if denied. 80% approval rate.</p></div>
+      </div>
+      <div class="action-item">
+        <div class="action-icon" style="background:rgba(16,185,129,.15);color:var(--green)">&#x1f4e6;</div>
+        <div><h4>submit_evidence_bundle()</h4><p>End episode. Reward based on F1 of threat nodes in collected evidence vs ground truth cluster.</p></div>
+      </div>
+    </div>
+
+    <!-- Reward Function -->
+    <div class="mdp-card full-width">
+      <h3>R &mdash; Reward Function</h3>
+      <div class="reward-formula">
+        R = <span class="reward-term" style="background:rgba(99,102,241,.15);color:var(--accent2)">&alpha;&middot;Threat_Confidence</span>
+        + <span class="reward-term" style="background:rgba(6,182,212,.15);color:var(--cyan)">&beta;&middot;Efficiency</span>
+        &minus; <span class="reward-term" style="background:rgba(239,68,68,.15);color:var(--red)">&gamma;&middot;Privacy_Penalty</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:12px;">
+        <div style="text-align:center">
+          <div style="font-size:24px;color:var(--accent2);font-weight:700">&alpha; = 0.3</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px"><strong>Weak signal</strong><br>Based on biased historical labels. Per-step: +0.06 for threat node. Submission: &alpha;&middot;F1&middot;10</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:24px;color:var(--cyan);font-weight:700">&beta; = 0.1</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px"><strong>Noisy but objective</strong><br>Per-step cost: -0.001. Submission bonus: &beta;&middot;(1 - steps/budget)&middot;5</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:24px;color:var(--red);font-weight:700">&gamma; = 1.0</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px"><strong>Strong, objective signal</strong><br>Visiting benign node: -0.3. Low-confidence link: -0.1. Unvisited evidence: -2.0 each</div>
+        </div>
+      </div>
+      <div style="margin-top:16px;padding:12px;background:var(--bg);border-radius:8px;font-size:13px;color:var(--orange);">
+        Key insight: &gamma; &gt;&gt; &alpha; &mdash; privacy penalty dominates. The agent must learn to be <em>precise</em> rather than thorough. Visiting innocent citizens is heavily penalised. This encodes the constitutional constraint directly into the learning signal.
+      </div>
+    </div>
+
+    <!-- Transition / Episode -->
+    <div class="mdp-card">
+      <h3>T &mdash; Transition Dynamics</h3>
+      <p style="color:var(--muted);font-size:13px;line-height:1.7">
+        <strong>Deterministic component:</strong> explore_node moves agent to selected neighbor.<br><br>
+        <strong>Stochastic components:</strong><br>
+        &bull; request_clearance: 80% grant / 20% deny<br>
+        &bull; Episode start: 70% at threat seed, 30% random node<br>
+        &bull; Entity resolution noise on ~15% of cross-agency links<br><br>
+        <strong>Constraints (guardrails baked into env):</strong><br>
+        &bull; Read-only &mdash; agent cannot modify graph<br>
+        &bull; Semantic window &mdash; only allowed edges visible<br>
+        &bull; Budget &mdash; max 50 steps per episode
+      </p>
+    </div>
+
+    <!-- Episode Structure -->
+    <div class="mdp-card">
+      <h3>Episode Structure</h3>
+      <div style="position:relative;padding:16px 0;">
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div style="width:32px;height:32px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">1</div>
+            <div style="font-size:13px"><strong>Spawn</strong> at seed node (70% threat, 30% random)</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div style="width:32px;height:32px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">2</div>
+            <div style="font-size:13px"><strong>Traverse</strong> graph via explore_node, collecting evidence</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div style="width:32px;height:32px;border-radius:50%;background:var(--orange);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">?</div>
+            <div style="font-size:13px"><strong>Optionally</strong> request_clearance to see personal edges</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div style="width:32px;height:32px;border-radius:50%;background:var(--green);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">3</div>
+            <div style="font-size:13px"><strong>Submit</strong> evidence bundle &rarr; F1 scored against ground truth</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div style="width:32px;height:32px;border-radius:50%;background:var(--red);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">!</div>
+            <div style="font-size:13px"><strong>Or</strong> budget exhausted (50 steps) &rarr; -0.5 penalty, truncated</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════ 3. EPISODE SIMULATION ════════════ -->
+<div class="section" id="sec-sim">
+  <h1>Episode Simulation</h1>
+  <p class="subtitle">Interactive walkthrough of an agent episode on a mini knowledge graph.</p>
+  <div class="sim-container">
+    <div class="sim-graph">
+      <canvas id="graphCanvas" width="800" height="500"></canvas>
+    </div>
+    <div class="sim-panel">
+      <div class="panel-card">
+        <h4>Controls</h4>
+        <button class="sim-btn" onclick="simReset()">Reset Episode</button>
+        <button class="sim-btn" id="btnExplore" onclick="simExplore()" disabled>Explore Best Neighbor</button>
+        <button class="sim-btn" id="btnClearance" onclick="simClearance()" style="background:var(--orange)" disabled>Request Clearance</button>
+        <button class="sim-btn success" id="btnSubmit" onclick="simSubmit()" disabled>Submit Evidence</button>
+        <button class="sim-btn" id="btnAutoplay" onclick="simAutoplay()" style="background:var(--surface2)" disabled>Autoplay (Rule-Based)</button>
+      </div>
+      <div class="panel-card">
+        <h4>Episode Stats</h4>
+        <div class="stat-row"><span class="label">Step</span><span class="value" id="statStep">-</span></div>
+        <div class="stat-row"><span class="label">Current Node</span><span class="value" id="statNode">-</span></div>
+        <div class="stat-row"><span class="label">Clearance</span><span class="value" id="statClear">Level 0</span></div>
+        <div class="stat-row"><span class="label">Evidence</span><span class="value" id="statEvidence">0</span></div>
+        <div class="stat-row"><span class="label">Threats Found</span><span class="value" id="statThreats" style="color:var(--red)">0</span></div>
+        <div class="stat-row"><span class="label">Total Reward</span><span class="value" id="statReward">0.000</span></div>
+        <div class="stat-row"><span class="label">Precision</span><span class="value" id="statPrec">-</span></div>
+      </div>
+      <div class="panel-card">
+        <h4>Action Log</h4>
+        <div class="sim-log" id="simLog"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════ 4. ACTORS ════════════ -->
+<div class="section" id="sec-actors">
+  <h1>Actors & Trust Levels</h1>
+  <p class="subtitle">Every component has an explicit trust posture. Click to expand.</p>
+
+  <div class="actor-card" onclick="this.classList.toggle('expanded')">
+    <div class="actor-icon" style="background:rgba(239,68,68,.15)">&#x1f916;</div>
+    <div class="actor-info">
+      <h3>RL Agent Ensemble</h3>
+      <p>Traverse KG, build evidence bundles. Multiple agents with GRPO consensus scoring. Local LLM + LoRA adapters. Read-only sandbox.</p>
+      <span class="trust-badge" style="background:rgba(239,68,68,.15);color:var(--red)">UNTRUSTED &mdash; all outputs validated</span>
+    </div>
+  </div>
+
+  <div class="actor-card">
+    <div class="actor-icon" style="background:rgba(99,102,241,.15)">&#x1f6e1;</div>
+    <div class="actor-info">
+      <h3>Guardrail Layer (G1-G6)</h3>
+      <p>Automated runtime checks. Confidence calibration, scope boundary, anti-hallucination, evidence sufficiency, bias detection, independent risk scoring.</p>
+      <span class="trust-badge" style="background:rgba(99,102,241,.15);color:var(--accent2)">SYSTEM COMPONENT</span>
+    </div>
+  </div>
+
+  <div class="actor-card">
+    <div class="actor-icon" style="background:rgba(16,185,129,.15)">&#x1f464;</div>
+    <div class="actor-info">
+      <h3>Operators (Human Analysts)</h3>
+      <p>Review evidence bundles, approve/reject, document reasoning. Evidence shown first, conclusion hidden. Anti-rubber-stamp enforced.</p>
+      <span class="trust-badge" style="background:rgba(16,185,129,.15);color:var(--green)">TRUSTED &mdash; monitored for bias</span>
+    </div>
+  </div>
+
+  <div class="actor-card">
+    <div class="actor-icon" style="background:rgba(6,182,212,.15)">&#x1f3db;</div>
+    <div class="actor-info">
+      <h3>Oversight Body</h3>
+      <p>Full audit access, pipeline halt authority. Independent from operational chain.</p>
+      <span class="trust-badge" style="background:rgba(6,182,212,.15);color:var(--cyan)">INDEPENDENT AUTHORITY</span>
+    </div>
+  </div>
+
+  <div class="actor-card">
+    <div class="actor-icon" style="background:rgba(6,182,212,.15)">&#x2696;</div>
+    <div class="actor-info">
+      <h3>Riksdag (Parliament)</h3>
+      <p>3-year sunset renewal cycle. Annual reporting requirement. Democratic accountability over system existence.</p>
+      <span class="trust-badge" style="background:rgba(6,182,212,.15);color:var(--cyan)">DEMOCRATIC ACCOUNTABILITY</span>
+    </div>
+  </div>
+
+  <div class="actor-card">
+    <div class="actor-icon" style="background:rgba(245,158,11,.15)">&#x1f310;</div>
+    <div class="actor-info">
+      <h3>CyberSecurity AB</h3>
+      <p>External threat intelligence. One-way data flow, queries obfuscated. Never merged into sovereign KG.</p>
+      <span class="trust-badge" style="background:rgba(245,158,11,.15);color:var(--orange)">UNTRUSTED &mdash; hypothesis source only</span>
+    </div>
+  </div>
+
+  <div class="actor-card">
+    <div class="actor-icon" style="background:rgba(99,102,241,.15)">&#x1f517;</div>
+    <div class="actor-info">
+      <h3>Entity Resolution Pipeline</h3>
+      <p>Cross-agency identity stitching. ~85% personnummer exact match, ~15% probabilistic with confidence scores.</p>
+      <span class="trust-badge" style="background:rgba(99,102,241,.15);color:var(--accent2)">PREPROCESSING &mdash; confidence-scored</span>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════ 5. GUARDRAILS ════════════ -->
+<div class="section" id="sec-guardrails">
+  <h1>Three-Layer Guardrail Architecture</h1>
+  <p class="subtitle">Training-time (reward shaping) + Runtime automated (G1-G6) + Human-in-the-Loop. Click each for rationale.</p>
+
+  <h2 style="margin:24px 0 12px;font-size:16px;color:var(--orange)">Layer 1: Training-Time (baked into reward)</h2>
+  <div class="guardrail-list" style="margin-bottom:24px">
+    <div class="guardrail-item" onclick="this.classList.toggle('open')" style="border-color:var(--orange)">
+      <h4>&gamma; &gt;&gt; &alpha; Privacy penalty dominates</h4>
+      <p>Visiting benign nodes costs 10x more than the signal from finding threats.</p>
+      <div class="why">Constitutional constraint: mass surveillance is illegal. Agent learns precision over recall.</div>
+    </div>
+    <div class="guardrail-item" onclick="this.classList.toggle('open')" style="border-color:var(--orange)">
+      <h4>Low-confidence link penalty</h4>
+      <p>Traversing edges with ER confidence &lt; 0.6 incurs additional -0.1 penalty.</p>
+      <div class="why">Prevents agent from acting on uncertain entity matches &mdash; wrong person is worse than no lead.</div>
+    </div>
+    <div class="guardrail-item" onclick="this.classList.toggle('open')" style="border-color:var(--orange)">
+      <h4>Budget constraint (50 steps)</h4>
+      <p>Episode truncates after 50 steps with -0.5 penalty.</p>
+      <div class="why">Forces efficient investigation. Unbounded traversal = unbounded privacy intrusion.</div>
+    </div>
+  </div>
+
+  <h2 style="margin:24px 0 12px;font-size:16px;color:var(--red)">Layer 2: Runtime Automated (G1-G6)</h2>
+  <div class="guardrail-list" style="margin-bottom:24px">
+    <div class="guardrail-item" onclick="this.classList.toggle('open')" style="border-color:var(--red)">
+      <h4>G1: Confidence Calibration</h4>
+      <p>Platt scaling ensures agent's confidence scores map to actual probabilities.</p>
+      <div class="why">Raw neural network logits are poorly calibrated. A "90% confident" agent should be right 90% of the time.</div>
+    </div>
+    <div class="guardrail-item" onclick="this.classList.toggle('open')" style="border-color:var(--red)">
+      <h4>G2: Scope Boundary Check</h4>
+      <p>Every node access validated against investigation mandate.</p>
+      <div class="why">Prevents scope creep. Investigation into company X cannot silently expand to company Y.</div>
+    </div>
+    <div class="guardrail-item" onclick="this.classList.toggle('open')" style="border-color:var(--red)">
+      <h4>G3: Anti-Hallucination</h4>
+      <p>Every evidence item verified against actual database entry.</p>
+      <div class="why">LLMs can fabricate plausible-sounding entity IDs. A fake personnummer in an evidence bundle = wrongful investigation.</div>
+    </div>
+    <div class="guardrail-item" onclick="this.classList.toggle('open')" style="border-color:var(--red)">
+      <h4>G4: Evidence Sufficiency</h4>
+      <p>Minimum evidence threshold before bundle accepted.</p>
+      <div class="why">Prevents empty or trivial submissions. Investigation must have substance.</div>
+    </div>
+    <div class="guardrail-item" onclick="this.classList.toggle('open')" style="border-color:var(--red)">
+      <h4>G5: Disproportion Detector</h4>
+      <p>Bias check on evidence demographics and patterns.</p>
+      <div class="why">If 80% of flagged individuals share a protected characteristic, something is wrong with the model or data.</div>
+    </div>
+    <div class="guardrail-item" onclick="this.classList.toggle('open')" style="border-color:var(--red)">
+      <h4>G6: Independent Risk Assessment</h4>
+      <p>System computes risk score independently. Agent's self-reported confidence discarded.</p>
+      <div class="why">Agent has incentive to overstate confidence. Independent assessment prevents self-serving risk evaluation.</div>
+    </div>
+  </div>
+
+  <h2 style="margin:24px 0 12px;font-size:16px;color:var(--green)">Layer 3: Human-in-the-Loop</h2>
+  <div class="guardrail-list">
+    <div class="guardrail-item" onclick="this.classList.toggle('open')" style="border-color:var(--green)">
+      <h4>Evidence-First Presentation</h4>
+      <p>Agent's conclusion hidden until operator forms independent assessment.</p>
+      <div class="why">Prevents anchoring bias. If you see "THREAT: 95%" first, you evaluate evidence to confirm, not challenge.</div>
+    </div>
+    <div class="guardrail-item" onclick="this.classList.toggle('open')" style="border-color:var(--green)">
+      <h4>Mandatory Alternative Hypothesis</h4>
+      <p>Operator must articulate a benign explanation before approving.</p>
+      <div class="why">Forces adversarial thinking. "Could this pattern be legitimate?" must be answered.</div>
+    </div>
+    <div class="guardrail-item" onclick="this.classList.toggle('open')" style="border-color:var(--green)">
+      <h4>Risk-Tiered Routing</h4>
+      <p>Low &rarr; standard analyst | Medium &rarr; senior + reasoning | High &rarr; + delay | Critical &rarr; dual approval</p>
+      <div class="why">Proportionality: a tax audit flag needs less scrutiny than a counter-terrorism flag.</div>
+    </div>
+    <div class="guardrail-item" onclick="this.classList.toggle('open')" style="border-color:var(--green)">
+      <h4>Anti-Rubber-Stamp</h4>
+      <p>System monitors operator approval rates. Unusually high approval rates flagged.</p>
+      <div class="why">Human oversight is worthless if the human always clicks "approve". Deliberation time enforced for High+ risk.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════ 6. AB FLOW ════════════ -->
+<div class="section" id="sec-ab">
+  <h1>CyberSecurity AB: Data Flow</h1>
+  <p class="subtitle">External threat intelligence with strict trust boundaries.</p>
+
+  <div class="ab-flow">
+    <div class="ab-node" style="border-color:var(--cyan)">
+      <h4 style="color:var(--cyan)">Swedish Government Environment</h4>
+      <p>Generates obfuscated, batched queries. No raw intelligence in queries.</p>
+    </div>
+    <div class="ab-arrow">
+      <span class="arrow-label">query(obfuscated, batched)</span>
+      <span style="font-size:20px">&darr;</span>
+    </div>
+    <div class="ab-node" style="border-color:var(--orange)">
+      <h4 style="color:var(--orange)">CyberSecurity AB API</h4>
+      <p>International OSINT knowledge graph. Commercial entity.</p>
+    </div>
+    <div class="ab-arrow">
+      <span class="arrow-label">response (threat hypotheses)</span>
+      <span style="font-size:20px">&darr;</span>
+    </div>
+    <div class="ab-node">
+      <h4>Ingestion Adapter</h4>
+      <p>Stored separately. <strong>Never merged</strong> into sovereign KG.</p>
+    </div>
+    <div class="ab-arrow">
+      <span class="arrow-label">filtered, tagged as external</span>
+      <span style="font-size:20px">&darr;</span>
+    </div>
+    <div class="ab-node" style="border-color:var(--red)">
+      <h4 style="color:var(--red)">Guardrail G1-G6</h4>
+      <p>Same validation pipeline as agent outputs.</p>
+    </div>
+    <div class="ab-arrow">
+      <span class="arrow-label">validated hypothesis</span>
+      <span style="font-size:20px">&darr;</span>
+    </div>
+    <div class="ab-node" style="border-color:var(--green)">
+      <h4 style="color:var(--green)">Operator Review</h4>
+      <p>Human decides whether to use AB hypothesis as investigation seed.</p>
+    </div>
+
+    <div class="ab-warning" style="margin-top:32px">
+      <h4>Honest Difficulty Assessment</h4>
+      <p>
+        Contractual audit rights and personnel segregation are <strong>nearly impossible to enforce</strong> in practice for a commercial partner.
+        Architecture must assume AB data could be poisoned &mdash; hence: plugin (not dependency), separate storage, full guardrail pass, and operator can reject.
+        Disconnection must be painless.
+      </p>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Navigation ──
+function show(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('sec-' + id).classList.add('active');
+  document.querySelectorAll('nav button').forEach(b => {
+    if (b.textContent.toLowerCase().includes(id.substring(0,3)) ||
+        (id === 'arch' && b.textContent.includes('System')) ||
+        (id === 'mdp' && b.textContent.includes('RL')) ||
+        (id === 'sim' && b.textContent.includes('Simulation')) ||
+        (id === 'actors' && b.textContent.includes('Actors')) ||
+        (id === 'guardrails' && b.textContent.includes('Guardrails')) ||
+        (id === 'ab' && b.textContent.includes('AB')))
+      b.classList.add('active');
+  });
+  if (id === 'sim') initSim();
+}
+
+function toggleLayer(el) { el.classList.toggle('expanded'); }
+
+// ── Mini Graph for Simulation ──
+const ALPHA=0.3, BETA=0.1, GAMMA=1.0;
+
+const miniNodes = [
+  {id:'P-0',type:'person',label:'Person A',gt:'threat',x:400,y:60,cluster:0},
+  {id:'C-0',type:'company',label:'Shell Co 1',gt:'threat',x:200,y:160,cluster:0},
+  {id:'C-1',type:'company',label:'Shell Co 2',gt:'threat',x:600,y:160,cluster:0},
+  {id:'T-0',type:'transaction',label:'Tx 480k',gt:'threat',x:400,y:260,cluster:0},
+  {id:'C-2',type:'company',label:'Shell Co 3',gt:'threat',x:400,y:360,cluster:0},
+  {id:'A-0',type:'address',label:'Shared Addr',gt:'threat',x:100,y:320,cluster:0},
+  {id:'P-1',type:'person',label:'Person B',gt:'benign',x:650,y:60},
+  {id:'C-3',type:'company',label:'Legit Corp',gt:'benign',x:700,y:260},
+  {id:'P-2',type:'person',label:'Person C',gt:'benign',x:150,y:450},
+  {id:'T-1',type:'transaction',label:'Tx 12k',gt:'benign',x:550,y:400},
+  {id:'C-4',type:'company',label:'Employer AB',gt:'ambiguous',x:350,y:470},
+];
+
+const miniEdges = [
+  {src:'P-0',dst:'C-0',type:'directs',cat:'corporate'},
+  {src:'P-0',dst:'C-1',type:'directs',cat:'corporate'},
+  {src:'C-0',dst:'T-0',type:'transacted',cat:'financial'},
+  {src:'T-0',dst:'C-2',type:'transacted',cat:'financial'},
+  {src:'C-0',dst:'A-0',type:'registered_at',cat:'personal'},
+  {src:'C-1',dst:'A-0',type:'registered_at',cat:'personal'},
+  {src:'C-2',dst:'A-0',type:'registered_at',cat:'personal'},
+  {src:'P-1',dst:'C-3',type:'employed_by',cat:'personal'},
+  {src:'P-1',dst:'C-1',type:'board_member',cat:'corporate'},
+  {src:'C-3',dst:'T-1',type:'transacted',cat:'financial'},
+  {src:'T-1',dst:'C-4',type:'transacted',cat:'financial'},
+  {src:'P-2',dst:'C-4',type:'employed_by',cat:'personal'},
+  {src:'P-2',dst:'P-2',type:'claims_benefit',cat:'personal'},
+];
+
+let sim = { current:null, visited:new Set(), evidence:[], step:0, reward:0, clearance:0, done:false, autoplay:null };
+
+const nodeColors = {person:'#6366f1',company:'#06b6d4',transaction:'#f59e0b',address:'#10b981'};
+const gtColors = {threat:'#ef4444',benign:'#10b981',ambiguous:'#f59e0b'};
+
+function getVisibleNeighbors() {
+  const allowed = sim.clearance >= 1 ? ['financial','corporate','personal'] : ['financial','corporate'];
+  const nbrs = [];
+  for (const e of miniEdges) {
+    if (!allowed.includes(e.cat)) continue;
+    if (e.src === sim.current && e.dst !== sim.current) nbrs.push({id:e.dst, edge:e});
+    if (e.dst === sim.current && e.src !== sim.current) nbrs.push({id:e.src, edge:e});
+  }
+  // deduplicate
+  const seen = new Set();
+  return nbrs.filter(n => { if(seen.has(n.id)) return false; seen.add(n.id); return true; });
+}
+
+function drawGraph() {
+  const canvas = document.getElementById('graphCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0,0,W,H);
+
+  const allowed = sim.clearance >= 1 ? ['financial','corporate','personal'] : ['financial','corporate'];
+
+  // draw edges
+  for (const e of miniEdges) {
+    if (e.src === e.dst) continue;
+    const s = miniNodes.find(n=>n.id===e.src);
+    const d = miniNodes.find(n=>n.id===e.dst);
+    const visible = allowed.includes(e.cat);
+    ctx.beginPath();
+    ctx.strokeStyle = visible ? (e.cat==='financial'?'#f59e0b':e.cat==='corporate'?'#6366f1':'#10b981') : 'rgba(71,85,105,.2)';
+    ctx.lineWidth = visible ? 2 : 1;
+    if (!visible) ctx.setLineDash([4,4]); else ctx.setLineDash([]);
+    ctx.moveTo(s.x,s.y);
+    ctx.lineTo(d.x,d.y);
+    ctx.stroke();
+    // label
+    if (visible) {
+      const mx=(s.x+d.x)/2, my=(s.y+d.y)/2;
+      ctx.font='10px Inter,sans-serif';
+      ctx.fillStyle='rgba(148,163,184,.7)';
+      ctx.fillText(e.type,mx+4,my-4);
+    }
+  }
+  ctx.setLineDash([]);
+
+  // draw nodes
+  for (const n of miniNodes) {
+    const isVisited = sim.visited.has(n.id);
+    const isCurrent = n.id === sim.current;
+    const isNeighbor = getVisibleNeighbors().some(nb=>nb.id===n.id);
+    const r = isCurrent ? 24 : 18;
+
+    // glow for current
+    if (isCurrent) {
+      ctx.beginPath();
+      ctx.arc(n.x,n.y,32,0,Math.PI*2);
+      ctx.fillStyle='rgba(99,102,241,.2)';
+      ctx.fill();
+    }
+    // highlight neighbors
+    if (isNeighbor && !isCurrent) {
+      ctx.beginPath();
+      ctx.arc(n.x,n.y,24,0,Math.PI*2);
+      ctx.strokeStyle='rgba(99,102,241,.4)';
+      ctx.lineWidth=2;
+      ctx.stroke();
+    }
+
+    ctx.beginPath();
+    ctx.arc(n.x,n.y,r,0,Math.PI*2);
+    ctx.fillStyle = isVisited ? nodeColors[n.type] : 'var(--surface2)';
+    if (!isVisited) ctx.fillStyle = '#334155';
+    ctx.fill();
+    ctx.strokeStyle = isCurrent ? '#fff' : (isVisited ? nodeColors[n.type] : '#475569');
+    ctx.lineWidth = isCurrent ? 3 : 1.5;
+    ctx.stroke();
+
+    // ground truth indicator (only if visited)
+    if (isVisited && n.gt) {
+      ctx.beginPath();
+      ctx.arc(n.x+r*0.7,n.y-r*0.7,5,0,Math.PI*2);
+      ctx.fillStyle = gtColors[n.gt];
+      ctx.fill();
+    }
+
+    // label
+    ctx.font = isCurrent ? 'bold 12px Inter,sans-serif' : '11px Inter,sans-serif';
+    ctx.fillStyle = isVisited ? '#fff' : '#94a3b8';
+    ctx.textAlign='center';
+    ctx.fillText(n.label,n.x,n.y+r+14);
+  }
+
+  // legend
+  ctx.font='11px Inter,sans-serif';
+  let ly = 16;
+  ctx.fillStyle='#94a3b8'; ctx.textAlign='left';
+  ctx.fillText('Edge colors:',10,ly); ly+=16;
+  for (const [cat,col] of [['financial','#f59e0b'],['corporate','#6366f1'],['personal','#10b981']]) {
+    ctx.fillStyle=col; ctx.fillRect(10,ly-8,10,10);
+    ctx.fillStyle='#94a3b8'; ctx.fillText(cat + (allowed.includes(cat)?'':' (hidden)'),26,ly); ly+=14;
+  }
+  ly+=8;
+  ctx.fillStyle='#94a3b8'; ctx.fillText('Node GT:',10,ly); ly+=14;
+  for (const [gt,col] of [['threat','#ef4444'],['benign','#10b981'],['ambiguous','#f59e0b']]) {
+    ctx.beginPath(); ctx.arc(16,ly-4,4,0,Math.PI*2); ctx.fillStyle=col; ctx.fill();
+    ctx.fillStyle='#94a3b8'; ctx.fillText(gt,26,ly); ly+=14;
+  }
+}
+
+function updateStats() {
+  document.getElementById('statStep').textContent = sim.step + ' / 50';
+  document.getElementById('statNode').textContent = sim.current || '-';
+  document.getElementById('statClear').textContent = 'Level ' + sim.clearance;
+  document.getElementById('statEvidence').textContent = sim.evidence.length;
+  const tc = sim.evidence.filter(id => {const n=miniNodes.find(x=>x.id===id); return n&&n.gt==='threat';}).length;
+  document.getElementById('statThreats').textContent = tc;
+  document.getElementById('statReward').textContent = sim.reward.toFixed(3);
+  document.getElementById('statPrec').textContent = sim.evidence.length ? (tc/sim.evidence.length*100).toFixed(0)+'%' : '-';
+
+  const canAct = !sim.done;
+  document.getElementById('btnExplore').disabled = !canAct;
+  document.getElementById('btnClearance').disabled = !canAct || sim.clearance >= 1;
+  document.getElementById('btnSubmit').disabled = !canAct;
+  document.getElementById('btnAutoplay').disabled = !canAct;
+}
+
+function log(msg) {
+  const el = document.getElementById('simLog');
+  el.innerHTML += msg + '<br>';
+  el.scrollTop = el.scrollHeight;
+}
+
+function simReset() {
+  if (sim.autoplay) { clearInterval(sim.autoplay); sim.autoplay=null; }
+  sim = {current:'P-0', visited:new Set(['P-0']), evidence:['P-0'], step:0, reward:0, clearance:0, done:false, autoplay:null};
+  document.getElementById('simLog').innerHTML = '';
+  log('Episode start at <strong>P-0</strong> (Person A) &mdash; threat seed');
+  drawGraph(); updateStats();
+}
+
+function simExplore() {
+  if (sim.done) return;
+  const nbrs = getVisibleNeighbors();
+  if (!nbrs.length) { log('<span style="color:var(--muted)">No visible neighbors!</span>'); return; }
+
+  // pick best: prefer unvisited threat-like nodes
+  let best=0, bestScore=-1;
+  for (let i=0;i<nbrs.length;i++) {
+    const nd = miniNodes.find(n=>n.id===nbrs[i].id);
+    let sc = 0;
+    if (!sim.visited.has(nbrs[i].id)) sc+=3;
+    if (nd.type==='company'||nd.type==='transaction') sc+=2;
+    if (nbrs[i].edge.cat==='financial') sc+=1;
+    if (sc>bestScore){bestScore=sc;best=i;}
+  }
+
+  const target = nbrs[best].id;
+  const nd = miniNodes.find(n=>n.id===target);
+  sim.current = target;
+  sim.visited.add(target);
+  sim.evidence.push(target);
+  sim.step++;
+
+  let r = 0;
+  if (nd.gt==='threat') r = ALPHA*0.2;
+  else if (nd.gt==='ambiguous') r = 0;
+  else r = -GAMMA*0.3;
+  r -= BETA*0.01;
+  sim.reward += r;
+
+  const rClass = r>=0?'reward-pos':'reward-neg';
+  log(`Step ${sim.step}: explore &rarr; <strong>${nd.label}</strong> <span class="${nd.gt}">[${nd.gt}]</span> <span class="${rClass}">(${r>=0?'+':''}${r.toFixed(3)})</span>`);
+
+  if (sim.step >= 50) { sim.done=true; sim.reward-=0.5; log('<span class="reward-neg">Budget exhausted! -0.5</span>'); }
+  drawGraph(); updateStats();
+}
+
+function simClearance() {
+  if (sim.done || sim.clearance >= 1) return;
+  sim.step++;
+  if (Math.random() < 0.8) {
+    sim.clearance = 1;
+    sim.reward -= 0.05;
+    log(`Step ${sim.step}: request_clearance &rarr; <span style="color:var(--green)">GRANTED</span> <span class="reward-neg">(-0.05)</span>. Personal edges now visible.`);
+  } else {
+    sim.reward -= 0.1;
+    log(`Step ${sim.step}: request_clearance &rarr; <span style="color:var(--red)">DENIED</span> <span class="reward-neg">(-0.10)</span>`);
+  }
+  sim.reward -= BETA*0.01;
+  drawGraph(); updateStats();
+}
+
+function simSubmit() {
+  if (sim.done) return;
+  sim.step++;
+  sim.done = true;
+
+  const tc = sim.evidence.filter(id=>{const n=miniNodes.find(x=>x.id===id);return n&&n.gt==='threat';}).length;
+  const prec = tc/sim.evidence.length;
+  const clusterSize = miniNodes.filter(n=>n.cluster===0).length;
+  const recall = tc/clusterSize;
+  const f1 = (prec+recall)>0 ? 2*prec*recall/(prec+recall) : 0;
+  let r = ALPHA*f1*10 + BETA*(1-sim.step/50)*5;
+  r -= BETA*0.01;
+  sim.reward += r;
+
+  log(`<br><strong>SUBMITTED</strong> evidence bundle (${sim.evidence.length} nodes)`);
+  log(`Threats: ${tc}/${sim.evidence.length} | Precision: ${(prec*100).toFixed(0)}% | Recall: ${(recall*100).toFixed(0)}% | F1: ${(f1*100).toFixed(0)}%`);
+  log(`Submission reward: <span class="${r>=0?'reward-pos':'reward-neg'}">${r>=0?'+':''}${r.toFixed(3)}</span>`);
+  log(`<strong>Total episode reward: ${sim.reward.toFixed(3)}</strong>`);
+  updateStats(); drawGraph();
+}
+
+function simAutoplay() {
+  if (sim.done) return;
+  if (sim.autoplay) { clearInterval(sim.autoplay); sim.autoplay=null; return; }
+  sim.autoplay = setInterval(() => {
+    if (sim.done) { clearInterval(sim.autoplay); sim.autoplay=null; return; }
+    const nbrs = getVisibleNeighbors();
+    const unvisited = nbrs.filter(n=>!sim.visited.has(n.id));
+
+    // rule-based: explore if unvisited neighbors, request clearance if stuck, submit if enough evidence
+    if (sim.evidence.length >= 5 && sim.step >= 8) { simSubmit(); return; }
+    if (unvisited.length > 0) { simExplore(); return; }
+    if (sim.clearance < 1 && nbrs.length === 0) { simClearance(); return; }
+    if (nbrs.length > 0) { simExplore(); return; }
+    simSubmit();
+  }, 600);
+}
+
+function initSim() {
+  if (!sim.current) simReset();
+  else { drawGraph(); updateStats(); }
+}
+
+// init
+show('arch');
+</script>
+</body>
+</html>
